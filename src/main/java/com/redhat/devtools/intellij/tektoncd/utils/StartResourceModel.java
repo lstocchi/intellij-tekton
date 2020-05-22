@@ -16,9 +16,12 @@ import com.redhat.devtools.intellij.common.utils.YAMLHelper;
 import com.redhat.devtools.intellij.tektoncd.tkn.Resource;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Input;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Output;
+import io.fabric8.kubernetes.api.model.HasMetadata;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -32,12 +35,14 @@ public class StartResourceModel {
     private List<Input> inputs;
     private List<Output> outputs;
     private List<Resource> resources;
+    private Map<String, HasMetadata> workspaces;
     private boolean isValid = true;
     private String errorMessage;
 
     public StartResourceModel(String configuration, List<Resource> resources) {
         this.resources = resources;
         this.errorMessage = "Tekton configuration has an invalid format:\n";
+        this.workspaces = Collections.emptyMap();
         buildModel(configuration);
     }
 
@@ -60,6 +65,7 @@ public class StartResourceModel {
             }
             buildInputs(configuration);
             buildOutputs(configuration);
+            buildWorkspaces(configuration);
 
             // if for a specific input/output type (git, image, ...) only a resource exists, set that resource as default value for input/output
             setDefaultValueResources();
@@ -88,6 +94,17 @@ public class StartResourceModel {
             JsonNode outputsNode = YAMLHelper.getValueFromYAML(configuration, new String[] {"spec", "outputs"});
             if (outputsNode != null) {
                 this.outputs = getOutputs(outputsNode);
+            }
+        }
+    }
+
+    private void buildWorkspaces(String configuration) throws IOException {
+        JsonNode workspacesNode = YAMLHelper.getValueFromYAML(configuration, new String[] {"spec", "workspaces"});
+        if (workspacesNode != null) {
+            workspaces = new HashMap<>();
+            for (Iterator<JsonNode> it = workspacesNode.elements(); it.hasNext(); ) {
+                JsonNode item = it.next();
+                workspaces.put(item.get("name").asText(), null);
             }
         }
     }
@@ -200,6 +217,10 @@ public class StartResourceModel {
 
     public List<Output> getOutputs() {
         return this.outputs;
+    }
+
+    public Map<String, HasMetadata> getWorkspaces() {
+        return this.workspaces;
     }
 
     public String getErrorMessage() {

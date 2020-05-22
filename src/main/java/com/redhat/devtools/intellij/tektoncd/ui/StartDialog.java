@@ -14,6 +14,7 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.redhat.devtools.intellij.tektoncd.tkn.Resource;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Input;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Output;
+import com.redhat.devtools.intellij.tektoncd.utils.StartResourceModel;
 import com.redhat.devtools.intellij.tektoncd.utils.YAMLBuilder;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -55,18 +56,25 @@ public class StartDialog extends DialogWrapper {
     private JLabel inputResourceValuesLbl;
     private JLabel inputResourcesLbl;
     private JLabel outputsTitle;
+    private JPanel workspacesPanel;
+    private JLabel wsLabel;
+    private JComboBox wsCB;
+    private JComboBox wsTypeCB;
+    private JComboBox wsTypeOptionsCB;
     private List<Input> inputs;
     private List<Resource> resources;
     private List<Output> outputs;
+    private StartResourceModel model;
 
     private String namespace;
     private String name;
 
     private Map<String, String> parameters, inputResources, outputResources;
 
-    public StartDialog(Component parent, String namespace, String name, String kind, List<Input> inputs, List<Output> outputs, List<Resource> resources) {
+    public StartDialog(Component parent, StartResourceModel model, String namespace, String name, String kind, List<Input> inputs, List<Output> outputs, List<Resource> resources) {
         super(null, parent, false, IdeModalityType.IDE);
 
+        this.model = model;
         this.namespace = namespace;
         this.name = name;
         this.inputs = inputs;
@@ -86,7 +94,7 @@ public class StartDialog extends DialogWrapper {
     }
 
     public static void main(String[] args) {
-        StartDialog dialog = new StartDialog(null, "",  "", "", null, null, null);
+        StartDialog dialog = new StartDialog(null, null, "",  "", "", null, null, null);
         dialog.pack();
         dialog.show();
         System.exit(0);
@@ -186,6 +194,9 @@ public class StartDialog extends DialogWrapper {
         return contentPane;
     }
 
+    private void initWorkspaceArea() {
+        
+    }
 
     private void initInputsArea() {
         if (inputs == null) {
