@@ -38,6 +38,7 @@ public class CRDHelper {
     }
 
     public static boolean isClusterScopedResource(String kind) {
-        return kind == KIND_CLUSTERTASKS || kind == KIND_CLUSTERTASK || kind == KIND_CLUSTERTRIGGERBINDING || kind == KIND_CLUSTERTRIGGERBINDINGS;
+        return kind.equalsIgnoreCase(KIND_CLUSTERTASKS) || kind.equalsIgnoreCase(KIND_CLUSTERTASK) ||
+                kind.equalsIgnoreCase(KIND_CLUSTERTRIGGERBINDING) || kind.equalsIgnoreCase(KIND_CLUSTERTRIGGERBINDINGS);
     }
 }
