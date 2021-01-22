@@ -15,7 +15,9 @@ import com.redhat.devtools.intellij.tektoncd.utils.model.actions.ActionToRunMode
 import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.border.Border;
@@ -34,8 +36,7 @@ import static com.redhat.devtools.intellij.tektoncd.ui.UIConstants.TIMES_PLAIN_1
 import static com.redhat.devtools.intellij.tektoncd.ui.UIConstants.TIMES_PLAIN_14;
 
 public class WorkspacesStep extends BaseStep {
-
-    List<JComboBox> cmbsWorkspaceTypes;
+    Map<String, JComboBox> workspaceXCmbsTypes;
 
     public WorkspacesStep(ActionToRunModel model) {
         super("Workspaces", model);
@@ -43,12 +44,13 @@ public class WorkspacesStep extends BaseStep {
 
     @Override
     public boolean isComplete() {
-        boolean isComplete = model.getWorkspaces().values().stream().allMatch(workspace -> workspace != null);
+        boolean isComplete = model.getWorkspaces().values().stream().allMatch(workspace -> workspace.getKind() != null
+                                                                                            || (workspace.getKind() == null && workspace.isOptional()));
         if (!isComplete) {
             final int[] row = {1};
-            cmbsWorkspaceTypes.stream().forEach(cmb -> {
-                if (!isValid(cmb)) {
-                    cmb.setBorder(RED_BORDER_SHOW_ERROR);
+            workspaceXCmbsTypes.entrySet().stream().forEach(cmb -> {
+                if (!isValid(cmb.getKey(), cmb.getValue())) {
+                    cmb.getValue().setBorder(RED_BORDER_SHOW_ERROR);
                     JLabel lblErrorText = new JLabel("Please select a value.");
                     lblErrorText.setForeground(Color.red);
                     addComponent(lblErrorText, TIMES_PLAIN_10, MARGIN_TOP_35, ROW_DIMENSION_ERROR, 0, row[0], GridBagConstraints.PAGE_END);
@@ -67,11 +69,14 @@ public class WorkspacesStep extends BaseStep {
     }
 
     public void setContent() {
-        cmbsWorkspaceTypes = new ArrayList<>();
+        workspaceXCmbsTypes = new HashMap<>();
         final int[] row = {0};
 
         model.getWorkspaces().keySet().forEach(workspaceName -> {
-            JLabel lblNameWorkspace = new JLabel("<html><span style=\\\"font-family:serif;font-size:10px;font-weight:bold;\\\">" + workspaceName + "</span></html");
+            Workspace workspace = workspaceName == null ? null : model.getWorkspaces().get(workspaceName) == null ? null : model.getWorkspaces().get(workspaceName);
+            boolean optional = workspace == null ? false : workspace.isOptional();
+            String lblOptional = optional ? "<span style=\"font-family:serif;font-size:10;font-weight:normal;font-style:italic;\">(Optional)</span>" : "";
+            JLabel lblNameWorkspace = new JLabel("<html><span style=\\\"font-family:serif;font-size:10px;font-weight:bold;\\\">" + workspaceName + "</span> " + lblOptional + "</html");
             addComponent(lblNameWorkspace,  null, BORDER_LABEL_NAME, ROW_DIMENSION, 0, row[0], GridBagConstraints.NORTH);
             row[0] += 1;
 
@@ -83,13 +88,13 @@ public class WorkspacesStep extends BaseStep {
             cmbWorkspaceTypes.addItem(CONFIGMAP);
             cmbWorkspaceTypes.addItem(SECRET);
             cmbWorkspaceTypes.addItem(PVC);
-            Workspace.Kind typeToBeSelected = workspaceName == null ? null : model.getWorkspaces().get(workspaceName) == null ? null : model.getWorkspaces().get(workspaceName).getKind();
+            Workspace.Kind typeToBeSelected = workspace == null ? null : workspace.getKind();
             if (typeToBeSelected != null) {
                 cmbWorkspaceTypes.setSelectedItem(typeToBeSelected);
             } else {
                 cmbWorkspaceTypes.setSelectedItem("");
             }
-            cmbsWorkspaceTypes.add(cmbWorkspaceTypes);
+            workspaceXCmbsTypes.put(workspaceName, cmbWorkspaceTypes);
             row[0] += 1;
 
             JComboBox cmbWorkspaceTypeValues = new JComboBox();
@@ -109,7 +114,7 @@ public class WorkspacesStep extends BaseStep {
                 String resource = cmbWorkspaceTypeValues.isVisible() && cmbWorkspaceTypeValues.getItemCount() > 0 ? cmbWorkspaceTypeValues.getSelectedItem().toString() : null;
                 updateWorkspaceModel(workspace, kindSelected, resource);
                 // reset error graphics if error occurred earlier
-                if (isValid(cmbWorkspaceTypes)) {
+                if (isValid(workspace, cmbWorkspaceTypes)) {
                     cmbWorkspaceTypes.setBorder(defaultBorder);
                     if (errorFieldsByRow.containsKey(row)) {
                         deleteComponent(errorFieldsByRow.get(row));
@@ -161,16 +166,23 @@ public class WorkspacesStep extends BaseStep {
     }
 
     private void updateWorkspaceModel(String workspaceName, Workspace.Kind kind, String resource) {
+        Workspace workspace = model.getWorkspaces().get(workspaceName);
         if (resource == null && kind != EMPTYDIR) {
-            model.getWorkspaces().put(workspaceName, null);
+            workspace.setKind(null);
+            workspace.setResource(null);
         } else {
-            Workspace workspace = new Workspace(workspaceName, kind, resource);
-            model.getWorkspaces().put(workspaceName, workspace);
+            workspace.setKind(kind);
+            workspace.setResource(resource);
         }
+        model.getWorkspaces().put(workspaceName, workspace);
     }
 
-    private boolean isValid(JComboBox component) {
-        if (!component.isVisible() || component.getSelectedIndex() == 0) return false;
+    private boolean isValid(String workspaceName, JComboBox component) {
+        boolean isOptional = model.getWorkspaces().get(workspaceName).isOptional();
+        if (!component.isVisible()
+                || (component.getSelectedIndex() == 0 && !isOptional))
+            return false;
+        if (isOptional) return true;
         Workspace.Kind kind = (Workspace.Kind) component.getSelectedItem();
         List<String> resourcesByKind = getResources(kind);
         if (kind != EMPTYDIR && resourcesByKind.size() == 0) return false;

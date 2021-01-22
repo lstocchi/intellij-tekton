@@ -463,6 +463,9 @@ public class TknCli implements Tkn {
         List<String> args = new ArrayList<>();
         if (argMap != null) {
             argMap.values().stream().forEach(item -> {
+                if (item.isOptional() && item.getKind() == null) {
+                    return;
+                }
                 args.add(FLAG_WORKSPACE);
                 if (item.getKind() == Workspace.Kind.PVC) {
                     args.add("name=" + item.getName() + ",claimName=" + item.getResource());

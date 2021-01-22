@@ -36,33 +36,66 @@ public class Workspace {
     private String name;
     private Kind kind;
     private String resource;
+    private boolean optional;
     private String subPath;
     private Map<String, String> items;
 
     public Workspace(String name, Kind kind, String resource) {
+        this(name, kind, resource, false);
+    }
+
+    public Workspace(String name, Kind kind, String resource, boolean optional) {
         this.name = name;
         this.kind = kind;
         this.resource = resource;
+        this.optional = optional;
     }
 
     public String getName() {
         return name;
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public Kind getKind() {
         return kind;
+    }
+
+    public void setKind(Kind kind) {
+        this.kind = kind;
     }
 
     public String getResource() {
         return resource;
     }
 
+    public void setResource(String resource) {
+        this.resource = resource;
+    }
+
+    public boolean isOptional() {
+        return optional;
+    }
+
+    public void setOptional(boolean optional) {
+        this.optional = optional;
+    }
+
     public String getSubPath() {
         return subPath;
+    }
+
+    public void setSubPath(String subPath) {
+        this.subPath = subPath;
     }
 
     public Map<String, String> getItems() {
         return items;
     }
 
+    public void setItems(Map<String, String> items) {
+        this.items = items;
+    }
 }

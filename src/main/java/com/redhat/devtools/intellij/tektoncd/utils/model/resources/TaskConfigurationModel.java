@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.redhat.devtools.intellij.common.utils.YAMLHelper;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Input;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Output;
+import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Workspace;
 import com.redhat.devtools.intellij.tektoncd.utils.model.ResourceConfigurationModel;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,7 +27,7 @@ public class TaskConfigurationModel extends ResourceConfigurationModel {
     private List<Input> params;
     private List<Input> inputResources;
     private List<Output> outputResources;
-    private List<String> workspaces;
+    private List<Workspace> workspaces;
 
     public TaskConfigurationModel(String configuration) {
         super(configuration);
@@ -80,7 +81,7 @@ public class TaskConfigurationModel extends ResourceConfigurationModel {
     }
 
     @Override
-    public List<String> getWorkspaces() {
+    public List<Workspace> getWorkspaces() {
         return this.workspaces;
     }
 }

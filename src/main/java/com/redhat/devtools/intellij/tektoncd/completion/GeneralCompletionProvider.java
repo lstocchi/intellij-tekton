@@ -22,6 +22,7 @@ import com.intellij.util.ProcessingContext;
 import com.redhat.devtools.intellij.common.utils.YAMLHelper;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Input;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Output;
+import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Workspace;
 import com.redhat.devtools.intellij.tektoncd.utils.TektonVirtualFileManager;
 import com.redhat.devtools.intellij.tektoncd.utils.model.ConfigurationModel;
 import com.redhat.devtools.intellij.tektoncd.utils.model.ConfigurationModelFactory;
@@ -335,7 +336,7 @@ public class GeneralCompletionProvider extends BaseCompletionProvider {
      * @param insertOffset the position where the lookup has to be copied on
      * @return
      */
-    private List<LookupElementBuilder> getWorkspaceLookups(List<String> workspaces, String prefix, String completionPrefix, int insertOffset) {
+    private List<LookupElementBuilder> getWorkspaceLookups(List<Workspace> workspaces, String prefix, String completionPrefix, int insertOffset) {
         List<LookupElementBuilder> lookups = new ArrayList<>();
         String headPrefix_13 = prefix.length() > 13 ? prefix.substring(0, 13) : prefix;
         if ("$(workspaces.".contains(headPrefix_13)) {
@@ -344,8 +345,8 @@ public class GeneralCompletionProvider extends BaseCompletionProvider {
             if (workspace != null) {
                 lookups.addAll(getLookupsByWorkspace("workspaces." + workspace, completionPrefix, insertOffset));
             } else {
-                workspaces.stream().forEach(workspaceName -> {
-                    lookups.add(createInnerLookup("workspaces." + workspaceName, completionPrefix, insertOffset));
+                workspaces.stream().forEach(wk -> {
+                    lookups.add(createInnerLookup("workspaces." + wk.getName(), completionPrefix, insertOffset));
                 });
             }
         }

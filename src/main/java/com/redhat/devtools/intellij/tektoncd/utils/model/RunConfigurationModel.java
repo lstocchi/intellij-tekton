@@ -110,8 +110,9 @@ public abstract class RunConfigurationModel extends ConfigurationModel {
                     String resource = kind.equals(Workspace.Kind.PVC) ? item.get("persistentVolumeClaim").get("claimName").asText() :
                                       kind.equals(Workspace.Kind.CONFIGMAP) ? item.get("configMap").get("name").asText() :
                                       kind.equals(Workspace.Kind.SECRET) ? item.get("secret").get("secretName").asText() :
-                                        null;
-                    workspaces.put(name, new Workspace(name, kind, resource));
+                                      null;
+                    boolean optional = item.has("optional") ? item.get("optional").asBoolean(false) : false;
+                    workspaces.put(name, new Workspace(name, kind, resource, optional));
                 }
             }
         } catch (IOException e) {
