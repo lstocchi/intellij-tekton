@@ -14,8 +14,8 @@ jobs:
           types-mapping: 'feat:Features,fix:Bug Fixes,docs:Documentation'
           scopes-mapping: 'UI:UI,Hub:Hub'
       - run: |
-          echo '${{ steps.changelog.outputs.changelog }}' > target/draft-changelog.md
+          echo '${{ steps.changelog.outputs.changelog }}' > draft-changelog.md
       - uses: actions/upload-artifact@v2
         with:
           name: draft-changelog
-          path: target/draft-changelog.md
+          path: draft-changelog.md
