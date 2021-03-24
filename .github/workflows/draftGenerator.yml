@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Simple conventional changelog
-        uses: lstocchi/simple-conventional-changelog@0.0.7
+        uses: lstocchi/simple-conventional-changelog@0.0.8
         id: changelog
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
