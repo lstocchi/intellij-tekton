@@ -17,5 +17,5 @@ jobs:
           echo '${{ steps.changelog.outputs.changelog }}' > draft-changelog.md
       - uses: actions/upload-artifact@v2
         with:
-          name: draft-changelog
+          name: drafrt-changelog
           path: draft-changelog.md
