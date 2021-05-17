@@ -11,18 +11,17 @@
 package com.redhat.devtools.intellij.tektoncd.utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.Strings;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
-import com.intellij.ui.treeStructure.Tree;
+import com.redhat.devtools.intellij.common.model.GenericResource;
 import com.redhat.devtools.intellij.common.utils.JSONHelper;
 import com.redhat.devtools.intellij.common.utils.UIHelper;
-import com.redhat.devtools.intellij.common.utils.YAMLHelper;
-import com.redhat.devtools.intellij.tektoncd.Constants;
+import com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService;
 import com.redhat.devtools.intellij.tektoncd.tkn.Tkn;
-import com.redhat.devtools.intellij.tektoncd.tree.TektonRootNode;
-import com.redhat.devtools.intellij.tektoncd.tree.TektonTreeStructure;
 import io.fabric8.kubernetes.api.model.Status;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext;
@@ -32,12 +31,95 @@ import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
+import static com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService.NAME_PREFIX_CRUD;
+import static com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService.PROP_RESOURCE_CRUD;
+import static com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService.VALUE_ABORTED;
+import static com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService.VALUE_RESOURCE_CRUD_CREATE;
+import static com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService.VALUE_RESOURCE_CRUD_UPDATE;
+import static com.redhat.devtools.intellij.telemetry.core.service.TelemetryMessageBuilder.ActionMessage;
+import static com.redhat.devtools.intellij.telemetry.core.util.AnonymizeUtils.anonymizeResource;
+
 public class DeployHelper {
-    private static Logger logger = LoggerFactory.getLogger(DeployHelper.class);
+    private static final Logger logger = LoggerFactory.getLogger(DeployHelper.class);
 
-    public static boolean saveOnCluster(Project project, String namespace, String yaml, String confirmationMessage) throws IOException {
-        DeployModel model = isValid(yaml);
+    private DeployHelper() {}
 
+    public static boolean saveOnCluster(Project project, String namespace, String yaml, String confirmationMessage, boolean updateLabels, boolean skipConfirmatioDialog) throws IOException {
+        ActionMessage telemetry = TelemetryService.instance().action(NAME_PREFIX_CRUD + "save to cluster");
+
+        GenericResource resource = getResource(yaml, telemetry);
+
+        Tkn tknCli = TreeHelper.getTkn(project);
+        if (tknCli == null) {
+            telemetry.error("tkn not found")
+                    .send();
+            return false;
+        }
+
+        if (namespace.isEmpty()) {
+            namespace = tknCli.getNamespace();
+        }
+
+        if (confirmationMessage.isEmpty()) {
+            confirmationMessage = getDefaultConfirmationMessage(resource.getName(), resource.getKind());
+        }
+
+        if (!skipConfirmatioDialog && !isSaveConfirmed(confirmationMessage)) {
+            telemetry.result(VALUE_ABORTED)
+                    .send();
+            return false;
+        }
+
+        try {
+            String resourceNamespace = CRDHelper.isClusterScopedResource(resource.getKind()) ? "" : namespace;
+            boolean isNewResource = executeTkn(resourceNamespace, yaml, updateLabels, resource, tknCli);
+            telemetry.property(PROP_RESOURCE_CRUD, (isNewResource ? VALUE_RESOURCE_CRUD_CREATE : VALUE_RESOURCE_CRUD_UPDATE))
+                    .send();
+        } catch (KubernetesClientException e) {
+            String errorMsg = createErrorMessage(resource, e);
+            telemetry.error(anonymizeResource(resource.getName(), namespace, errorMsg))
+                    .send();
+            logger.warn(errorMsg, e);
+            // give a visual notification to user if an error occurs during saving
+            throw new IOException(errorMsg, e);
+        }
+        return true;
+    }
+
+    public static boolean saveOnCluster(Project project, String yaml, boolean skipConfirmationDialog) throws IOException {
+        return saveOnCluster(project, "", yaml, "", false, skipConfirmationDialog);
+    }
+
+    public static boolean saveOnCluster(Project project, String yaml) throws IOException {
+        return saveOnCluster(project, "", yaml, "", false, false);
+    }
+
+    public static boolean saveTaskOnClusterFromHub(Project project, String name, String version, boolean overwrite, String confirmationMessage) throws IOException {
+        if (!isSaveConfirmed(confirmationMessage)) {
+            return false;
+        }
+
+        Tkn tknCli = TreeHelper.getTkn(project);
+        if (tknCli == null) {
+            return false;
+        }
+
+        tknCli.installTaskFromHub(name, version, overwrite);
+
+        return true;
+    }
+
+    public static boolean existsResource(Project project, String name, CustomResourceDefinitionContext crdContext) throws IOException {
+        Tkn tknCli = TreeHelper.getTkn(project);
+        if (tknCli == null) {
+            return false;
+        }
+        Map<String, Object> resource = tknCli.getCustomResource(tknCli.getNamespace(), name, crdContext);
+        return resource != null;
+    }
+
+    private static boolean isSaveConfirmed(String confirmationMessage) {
         int resultDialog = UIHelper.executeInUI(() ->
                 Messages.showYesNoDialog(
                         confirmationMessage,
@@ -45,103 +127,61 @@ public class DeployHelper {
                         null
                 ));
 
-        if (resultDialog != Messages.OK) return false;
-
-        Tree tree;
-        TektonTreeStructure treeStructure;
-        Tkn tknCli;
-        try {
-            tree = TreeHelper.getTree(project);
-            treeStructure = (TektonTreeStructure)tree.getClientProperty(Constants.STRUCTURE_PROPERTY);
-            TektonRootNode root = (TektonRootNode) treeStructure.getRootElement();
-            tknCli = root.getTkn();
-        } catch (Exception e) {
-            logger.warn("Error: " + e.getLocalizedMessage(), e);
-            return false;
-        }
-
-        try {
-            String resourceNamespace = CRDHelper.isClusterScopedResource(model.getKind()) ? "" : namespace;
-            if (CRDHelper.isRunResource(model.getKind())) {
-                tknCli.createCustomResource(resourceNamespace, model.getCrdContext(), yaml);
-            } else {
-                Map<String, Object> resource = tknCli.getCustomResource(namespace, model.getName(), model.getCrdContext());
-                if (resource == null) {
-                    tknCli.createCustomResource(resourceNamespace, model.getCrdContext(), yaml);
-                } else {
-                    JsonNode customResource = JSONHelper.MapToJSON(resource);
-                    ((ObjectNode) customResource).set("spec", model.getSpec());
-                    tknCli.editCustomResource(resourceNamespace, model.getName(), model.getCrdContext(), customResource.toString());
-                }
-            }
-        } catch (KubernetesClientException e) {
-            Status errorStatus = e.getStatus();
-            String errorMsg = "An error occurred while saving " + StringUtils.capitalize(model.getKind()) + " " + model.getName() + "\n";;
-            if (errorStatus != null && !Strings.isNullOrEmpty(errorStatus.getMessage())) {
-                errorMsg += errorStatus.getMessage() + "\n";
-            }
-            // give a visual notification to user if an error occurs during saving
-            throw new IOException(errorMsg + e.getLocalizedMessage());
-        }
-        return true;
+        return resultDialog == Messages.OK;
     }
 
-    public static DeployModel isValid(String yaml) throws IOException {
-        String name = YAMLHelper.getStringValueFromYAML(yaml, new String[] {"metadata", "name"});
-        String generateName = YAMLHelper.getStringValueFromYAML(yaml, new String[] {"metadata", "generateName"});
-        if (Strings.isNullOrEmpty(name) && Strings.isNullOrEmpty(generateName)) {
-            throw new IOException("Tekton file has not a valid format. Name field is not valid or found.");
-        }
-        String apiVersion = YAMLHelper.getStringValueFromYAML(yaml, new String[] {"apiVersion"});
-        if (Strings.isNullOrEmpty(apiVersion)) {
-            throw new IOException("Tekton file has not a valid format. ApiVersion field is not found.");
-        }
-        String kind = YAMLHelper.getStringValueFromYAML(yaml, new String[] {"kind"});
-        if (Strings.isNullOrEmpty(kind)) {
-            throw new IOException("Tekton file has not a valid format. Kind field is not found.");
-        }
-        CustomResourceDefinitionContext crdContext = CRDHelper.getCRDContext(apiVersion, TreeHelper.getPluralKind(kind));
+    private static boolean executeTkn(String namespace, String yaml, boolean updateLabels, GenericResource resource, Tkn tknCli) throws IOException {
+        CustomResourceDefinitionContext crdContext = CRDHelper.getCRDContext(resource.getApiVersion(), TreeHelper.getPluralKind(resource.getKind()));
         if (crdContext == null) {
             throw new IOException("Tekton file has not a valid format. ApiVersion field contains an invalid value.");
         }
-        JsonNode spec = YAMLHelper.getValueFromYAML(yaml, new String[] {"spec"});
-        if (spec == null) {
-            throw new IOException("Tekton file has not a valid format. Spec field is not found.");
+        boolean newResource = true;
+        if (CRDHelper.isRunResource(resource.getKind())) {
+            tknCli.createCustomResource(namespace, crdContext, yaml);
+        } else {
+            Map<String, Object> customResourceMap = tknCli.getCustomResource(namespace, resource.getName(), crdContext);
+            if (customResourceMap == null) {
+                tknCli.createCustomResource(namespace, crdContext, yaml);
+            } else {
+                JsonNode customResource = JSONHelper.MapToJSON(customResourceMap);
+                JsonNode labels = resource.getMetadata().get("labels");
+                if (updateLabels && labels != null) {
+                    ((ObjectNode) customResource.get("metadata")).set("labels", labels);
+                }
+                ((ObjectNode) customResource).set("spec", resource.getSpec());
+                tknCli.editCustomResource(namespace, resource.getName(), crdContext, customResource.toString());
+                newResource = false;
+            }
         }
-        return new DeployModel(name, kind, apiVersion, spec, crdContext);
-    }
-}
-
-class DeployModel {
-    private String name, apiVersion, kind;
-    private JsonNode spec;
-    private CustomResourceDefinitionContext crdContext;
-
-    public DeployModel(String name, String kind, String apiVersion, JsonNode spec, CustomResourceDefinitionContext crdContext) {
-        this.name = name;
-        this.apiVersion = apiVersion;
-        this.kind = kind;
-        this.spec = spec;
-        this.crdContext = crdContext;
+        return newResource;
     }
 
-    public String getName() {
-        return name;
+    private static String createErrorMessage(GenericResource resource, KubernetesClientException e) {
+        Status errorStatus = e.getStatus();
+        String errorMsg = "An error occurred while saving " + StringUtils.capitalize(resource.getKind()) + " " + resource.getName() + "\n";
+        if (errorStatus != null && !Strings.isNullOrEmpty(errorStatus.getMessage())) {
+            errorMsg += errorStatus.getMessage() + "\n";
+        }
+        return errorMsg;
     }
 
-    public String getApiVersion() {
-        return apiVersion;
+    public static GenericResource getResource(String yaml) throws IOException {
+        return getResource(yaml, null);
     }
 
-    public String getKind() {
-        return kind;
+    private static GenericResource getResource(String yaml, ActionMessage telemetry) throws IOException {
+        try {
+            ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+            return mapper.readValue(yaml, GenericResource.class);
+        } catch (IOException e) {
+            if (telemetry != null) {
+                telemetry.error(e).send();
+            }
+            throw e;
+        }
     }
 
-    public JsonNode getSpec() {
-        return spec;
-    }
-
-    public CustomResourceDefinitionContext getCrdContext() {
-        return crdContext;
+    private static String getDefaultConfirmationMessage(String name, String kind) {
+        return "Push changes for " + kind + " " + name + "?";
     }
 }

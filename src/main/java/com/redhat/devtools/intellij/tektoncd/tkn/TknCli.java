@@ -19,13 +19,20 @@ import com.intellij.openapi.project.Project;
 import com.redhat.devtools.intellij.common.utils.ExecHelper;
 import com.redhat.devtools.intellij.common.utils.NetworkUtils;
 import com.redhat.devtools.intellij.tektoncd.Constants;
+import com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService;
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Workspace;
+import com.redhat.devtools.intellij.tektoncd.ui.toolwindow.findusage.RefUsage;
 import com.redhat.devtools.intellij.tektoncd.utils.VirtualFileHelper;
 import com.twelvemonkeys.lang.Platform;
+import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.PersistentVolumeClaim;
+import io.fabric8.kubernetes.api.model.PersistentVolumeClaimSpec;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodCondition;
 import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.api.model.PodStatus;
+import io.fabric8.kubernetes.api.model.Quantity;
+import io.fabric8.kubernetes.api.model.ResourceRequirements;
 import io.fabric8.kubernetes.api.model.apps.StatefulSet;
 import io.fabric8.kubernetes.api.model.apps.StatefulSetCondition;
 import io.fabric8.kubernetes.api.model.apps.StatefulSetList;
@@ -36,7 +43,6 @@ import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext;
-import io.fabric8.openshift.client.OpenShiftClient;
 import io.fabric8.tekton.client.TektonClient;
 import io.fabric8.tekton.pipeline.v1alpha1.Condition;
 import io.fabric8.tekton.pipeline.v1beta1.ClusterTask;
@@ -58,12 +64,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 import static com.redhat.devtools.intellij.tektoncd.Constants.FLAG_INPUTRESOURCEPIPELINE;
@@ -74,10 +84,15 @@ import static com.redhat.devtools.intellij.tektoncd.Constants.FLAG_PREFIXNAME;
 import static com.redhat.devtools.intellij.tektoncd.Constants.FLAG_SERVICEACCOUNT;
 import static com.redhat.devtools.intellij.tektoncd.Constants.FLAG_TASKSERVICEACCOUNT;
 import static com.redhat.devtools.intellij.tektoncd.Constants.FLAG_WORKSPACE;
+import static com.redhat.devtools.intellij.tektoncd.Constants.KIND_PIPELINE;
 import static com.redhat.devtools.intellij.tektoncd.Constants.KIND_PIPELINERUN;
 import static com.redhat.devtools.intellij.tektoncd.Constants.KIND_TASKRUN;
+import static com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService.NAME_PREFIX_DIAG;
+import static com.redhat.devtools.intellij.tektoncd.telemetry.TelemetryService.PROP_RESOURCE_KIND;
 
 public class TknCli implements Tkn {
+
+    private static final Logger logger = LoggerFactory.getLogger(TknCli.class);
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper(new JsonFactory());
 
     private String command;
@@ -117,12 +132,12 @@ public class TknCli implements Tkn {
     }
 
     @Override
-    public List<String> getNamespaces() throws IOException {
-        if (client.isAdaptable(OpenShiftClient.class)) {
-            return client.adapt(OpenShiftClient.class).projects().list().getItems().stream().map(project -> project.getMetadata().getName()).collect(Collectors.toList());
-        } else {
-            return client.namespaces().list().getItems().stream().map(namespace -> namespace.getMetadata().getName()).collect(Collectors.toList());
+    public String getNamespace() throws IOException {
+        String namespace = client.getNamespace();
+        if (Strings.isNullOrEmpty(namespace)) {
+            namespace = "default";
         }
+        return namespace;
     }
 
     @Override
@@ -278,6 +293,33 @@ public class TknCli implements Tkn {
     }
 
     @Override
+    public  List<RefUsage> findTaskUsages(String kind, String resource) throws IOException {
+        String jsonPathExpr = "jsonpath=\\\"{range .items[*]}{@.metadata.name}|{range .spec.tasks[*]}{.taskRef.kind},{.taskRef.name}|{end}{end}\\\"";
+        String result = ExecHelper.execute(command, envVars, "pipeline", "ls", "-n", getNamespace(), "-o", jsonPathExpr);
+        String[] resultSplitted = result.replace("\"", "").split("\\|");
+        List<RefUsage> usages = new ArrayList<>();
+        String pipeline = "";
+        for (String item: resultSplitted) {
+            if (!item.contains(",")) {
+                pipeline = item;
+                continue;
+            }
+
+            String[] kindName = item.split(",");
+            if (kindName.length == 2 && kindName[0].equalsIgnoreCase(kind) && kindName[1].equalsIgnoreCase(resource) && !pipeline.isEmpty()) {
+                String finalPipeline = pipeline;
+                Optional<RefUsage> refUsage = usages.stream().filter(ref -> ref.getKind().equals(KIND_PIPELINE) && ref.getName().equals(finalPipeline)).findFirst();
+                if (refUsage.isPresent()) {
+                    refUsage.get().incremetOccurrence();
+                } else {
+                    usages.add(new RefUsage(getNamespace(), pipeline, KIND_PIPELINE));
+                }
+            }
+        }
+        return usages;
+    }
+
+    @Override
     public void deletePipelines(String namespace, List<String> pipelines, boolean deleteRelatedResources) throws IOException {
         if (deleteRelatedResources) {
             ExecHelper.execute(command, envVars, getDeleteArgs(namespace, "pipeline", pipelines, "--prs=true"));
@@ -398,6 +440,37 @@ public class TknCli implements Tkn {
     }
 
     @Override
+    public void createPVC(String name, String accessMode, String size, String unit) throws IOException {
+        PersistentVolumeClaim claim = new PersistentVolumeClaim();
+
+        ObjectMeta metadata = new ObjectMeta();
+        metadata.setName(name);
+
+        ResourceRequirements resourceRequirements = new ResourceRequirements();
+        Map<String, Quantity> requests = new HashMap<>();
+        requests.put("storage", new Quantity(size, unit));
+        resourceRequirements.setRequests(requests);
+
+        PersistentVolumeClaimSpec spec = new PersistentVolumeClaimSpec();
+        spec.setAccessModes(Arrays.asList(accessMode));
+        spec.setVolumeMode("Filesystem");
+        spec.setResources(resourceRequirements);
+
+        claim.setMetadata(metadata);
+        claim.setSpec(spec);
+
+        createPVC(claim);
+    }
+
+    private void createPVC(PersistentVolumeClaim persistentVolumeClaim) throws IOException {
+        try {
+            client.persistentVolumeClaims().create(persistentVolumeClaim);
+        } catch (KubernetesClientException e) {
+            throw new IOException(e.getLocalizedMessage(), e);
+        }
+    }
+
+    @Override
     public String startPipeline(String namespace, String pipeline, Map<String, String> parameters, Map<String, String> resources, String serviceAccount, Map<String, String> taskServiceAccount, Map<String, Workspace> workspaces, String runPrefixName) throws IOException {
         List<String> args = new ArrayList<>(Arrays.asList("pipeline", "start", pipeline, "-n", namespace));
         if (!serviceAccount.isEmpty()) {
@@ -470,7 +543,11 @@ public class TknCli implements Tkn {
             argMap.values().stream().forEach(item -> {
                 args.add(FLAG_WORKSPACE);
                 if (item.getKind() == Workspace.Kind.PVC) {
-                    args.add("name=" + item.getName() + ",claimName=" + item.getResource());
+                    if (item.getItems() != null && item.getItems().containsKey("file")) {
+                        args.add("name=" + item.getName() + ",volumeClaimTemplateFile=" + item.getItems().get("file"));
+                    } else {
+                        args.add("name=" + item.getName() + ",claimName=" + item.getResource());
+                    }
                 } else if (item.getKind() == Workspace.Kind.CONFIGMAP) {
                     args.add("name=" + item.getName() + ",config=" + item.getResource());
                 } else if (item.getKind() == Workspace.Kind.SECRET) {
@@ -489,7 +566,9 @@ public class TknCli implements Tkn {
             ExecHelper.executeWithTerminal(project, Constants.TERMINAL_TITLE,false, envVars, command, "pipelinerun", "logs", pipelineRun, "-n", namespace);
         } else {
             String fileName = namespace + "-" + KIND_PIPELINERUN + "-" + pipelineRun + ".log";
-            ExecHelper.executeWithUI(envVars, outputToEditor(fileName),command, "pipelinerun", "logs", pipelineRun, "-f", "-n", namespace);
+            ExecHelper.executeWithUI(envVars,
+                    outputToEditor(fileName, KIND_PIPELINERUN),
+                    command, KIND_PIPELINERUN, "logs", pipelineRun, "-f", "-n", namespace);
         }
     }
 
@@ -499,7 +578,9 @@ public class TknCli implements Tkn {
             ExecHelper.executeWithTerminal(project, Constants.TERMINAL_TITLE, false, envVars, command, "taskrun", "logs", taskRun, "-n", namespace);
         } else {
             String fileName = namespace + "-" + KIND_TASKRUN + "-" + taskRun + ".log";
-            ExecHelper.executeWithUI(envVars, outputToEditor(fileName),command, "taskrun", "logs", taskRun, "-f", "-n", namespace);
+            ExecHelper.executeWithUI(envVars,
+                    outputToEditor(fileName, KIND_TASKRUN),
+                    command, KIND_TASKRUN, "logs", taskRun, "-f", "-n", namespace);
         }
     }
 
@@ -514,7 +595,10 @@ public class TknCli implements Tkn {
             ExecHelper.executeWithTerminal(project, Constants.TERMINAL_TITLE,false, envVars, command, "pipelinerun", "logs", pipelineRun, "-f", "-n", namespace);
         } else {
             String fileName = namespace + "-" + KIND_PIPELINERUN + "-" + pipelineRun + "-follow.log";
-            ExecHelper.executeWithUI(envVars, openEmptyEditor(fileName), outputToEditor(fileName),command, "pipelinerun", "logs", pipelineRun, "-f", "-n", namespace);
+            ExecHelper.executeWithUI(envVars,
+                    openEmptyEditor(fileName, KIND_PIPELINERUN),
+                    outputToEditor(fileName, KIND_PIPELINERUN),
+                    command, KIND_PIPELINERUN, "logs", pipelineRun, "-f", "-n", namespace);
         }
     }
 
@@ -524,17 +608,42 @@ public class TknCli implements Tkn {
             ExecHelper.executeWithTerminal(project, Constants.TERMINAL_TITLE, false, envVars, command, "taskrun", "logs", taskRun, "-f", "-n", namespace);
         } else {
             String fileName = namespace + "-" + KIND_TASKRUN + "-" + taskRun + "-follow.log";
-            ExecHelper.executeWithUI(envVars, openEmptyEditor(fileName), outputToEditor(fileName),command, "taskrun", "logs", taskRun, "-f", "-n", namespace);
+            ExecHelper.executeWithUI(envVars,
+                    openEmptyEditor(fileName, KIND_TASKRUN),
+                    outputToEditor(fileName, KIND_TASKRUN),
+                    command, KIND_TASKRUN, "logs", taskRun, "-f", "-n", namespace);
         }
     }
 
-    private Runnable openEmptyEditor(String fileName) {
-        return () -> VirtualFileHelper.openVirtualFileInEditor(project, fileName, "", true);
+    private Runnable openEmptyEditor(String fileName, String kind) {
+        return () -> {
+            try {
+                VirtualFileHelper.openVirtualFileInEditor(project, fileName, "");
+            } catch (IOException e) {
+                String errorMessage = "Could open empty editor for logs: " + e.getLocalizedMessage();
+                TelemetryService.instance().action(NAME_PREFIX_DIAG + "follow logs in editor")
+                        .property(TelemetryService.PROP_RESOURCE_KIND, kind)
+                        .error(errorMessage)
+                        .send();
+                logger.warn(errorMessage, e);
+            }
+        };
     }
 
-    private Consumer<String> outputToEditor(String fileName) {
-        return (sb) -> ApplicationManager.getApplication().runWriteAction(
-                            () -> VirtualFileHelper.openVirtualFileInEditor(project, fileName, sb, true)
+    private Consumer<String> outputToEditor(String fileName, String kind) {
+        return (sb) -> ApplicationManager.getApplication().runWriteAction(() -> {
+                    try {
+                        // called each time a line is added to log: dont send telemetry
+                        VirtualFileHelper.openVirtualFileInEditor(project, fileName, sb);
+                    } catch (IOException e) {
+                        String errorMessage = "Could not output logs to editor: " + e.getLocalizedMessage();
+                        TelemetryService.instance().action(NAME_PREFIX_DIAG + "output logs in editor")
+                                .property(PROP_RESOURCE_KIND, kind)
+                                .error(errorMessage)
+                                .send();
+                        logger.warn(errorMessage, e);
+                    }
+                }
         );
     }
 
@@ -556,6 +665,15 @@ public class TknCli implements Tkn {
     @Override
     public void cancelTaskRun(String namespace, String taskRun) throws IOException {
         ExecHelper.execute(command, "taskrun", "cancel", taskRun, "-n", namespace);
+    }
+
+    @Override
+    public Watch watchPipeline(String namespace, String pipeline, Watcher<Pipeline> watcher) throws IOException {
+        try {
+            return client.adapt(TektonClient.class).v1beta1().pipelines().inNamespace(namespace).withName(pipeline).watch(watcher);
+        } catch (KubernetesClientException e) {
+            throw new IOException(e);
+        }
     }
 
     @Override
@@ -696,6 +814,17 @@ public class TknCli implements Tkn {
             ExecHelper.executeWithTerminal(project, Constants.TERMINAL_TITLE, false, envVars, "echo", "-e", data);
         }
         return true;
+    }
+
+    @Override
+    public void installTaskFromHub(String task, String version, boolean overwrite) throws IOException {
+        String installType = overwrite ? "reinstall" : "install";
+        ExecHelper.execute(command, envVars, "hub", installType, "task", task, "--version", version);
+    }
+
+    @Override
+    public String getTaskYAMLFromHub(String task, String version) throws IOException {
+        return ExecHelper.execute(command, envVars, "hub", "get", "task", task, "--version", version);
     }
 
     private String getTempFile(String data) throws IOException {

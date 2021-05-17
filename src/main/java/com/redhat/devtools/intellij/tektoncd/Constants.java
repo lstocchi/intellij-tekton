@@ -18,6 +18,7 @@ public class Constants {
     public static final Key<String> NAMESPACE = Key.create("com.redhat.devtools.intellij.tektoncd.tekton.namespace");
     public static final Key<String> KIND_PLURAL = Key.create("com.redhat.devtools.intellij.tektoncd.tekton.plural");
     public static final Key<ParentableNode> TARGET_NODE = Key.create("com.redhat.devtools.intellij.tektoncd.tekton.targetnode");
+    public static final String APIVERSION_BETA = "tekton.dev/v1beta1";
 
     public static final String KIND_CLUSTERTASKS = "clustertasks";
     public static final String KIND_PIPELINES = "pipelines";
@@ -60,6 +61,8 @@ public class Constants {
     public static final String TERMINAL_TITLE = "Tekton";
 
     public static final String STRUCTURE_PROPERTY = Constants.class.getPackage().getName() + ".structure";
+
+    public static final String HUB_CATALOG_TAG = "hub.tekton.dev/catalog";
 
     public enum InstallStatus {
         ERROR,

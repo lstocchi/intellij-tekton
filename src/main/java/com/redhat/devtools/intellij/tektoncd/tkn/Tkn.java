@@ -11,6 +11,7 @@
 package com.redhat.devtools.intellij.tektoncd.tkn;
 
 import com.redhat.devtools.intellij.tektoncd.tkn.component.field.Workspace;
+import com.redhat.devtools.intellij.tektoncd.ui.toolwindow.findusage.RefUsage;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext;
@@ -41,12 +42,12 @@ public interface Tkn {
     boolean isTektonTriggersAware();
 
     /**
-     * Return the names of the namespace (projects for OpenShift).
+     * Return the name of the current active namespace (project for OpenShift).
      *
-     * @return the list of namespaces names
+     * @return the active namespace name
      * @throws IOException if communication errored
      */
-    List<String> getNamespaces() throws IOException;
+    String getNamespace() throws IOException;
 
     /**
      * Return the names of the serviceAccounts for a namespace
@@ -262,6 +263,16 @@ public interface Tkn {
     String getEventListenerYAML(String namespace, String eventListener) throws IOException;
 
     /**
+     * Return all pipelines where the task is used
+     *
+     * @param kind the kind of task (task or clustertask)
+     * @param task the name of the task
+     * @return list of pipelines where the task is used
+     * @throws IOException if communication errored
+     */
+    List<RefUsage> findTaskUsages(String kind, String task) throws IOException;
+
+    /**
      * Delete a list of pipelines
      *
      * @param namespace the namespace to use
@@ -400,6 +411,17 @@ public interface Tkn {
      * @throws IOException
      */
     void createCustomResource(String namespace, CustomResourceDefinitionContext crdContext, String objectAsString) throws IOException;
+
+    /**
+     * Create a PVC
+     *
+     * @param name PVC name
+     * @param accessMode PVC accessMode
+     * @param size PVC size
+     * @param unit PVC size format (MB, GB or TB)
+     * @throws IOException if communication errored
+     */
+    void createPVC(String name, String accessMode, String size, String unit) throws IOException;
 
     /**
      * Start the execution of a pipeline
@@ -551,6 +573,17 @@ public interface Tkn {
     void cancelTaskRun(String namespace, String taskRun) throws IOException;
 
     /**
+     * Set a watch on Pipeline resource
+     *
+     * @param namespace the namespace to use
+     * @param pipeline the name of the pipeline
+     * @param watcher the watcher to call when a new event is received
+     * @return the watch object
+     * @throws IOException if communication errored
+     */
+    Watch watchPipeline(String namespace, String pipeline, Watcher<Pipeline> watcher) throws IOException;
+
+    /**
      * Set a watch on Pipeline resources
      *
      * @param namespace the namespace to use
@@ -680,6 +713,24 @@ public interface Tkn {
      * @throws IOException if communication errored
      */
     boolean getDiagnosticData(String namespace, String keyLabel, String valueLabel) throws IOException;
+
+    /**
+     * Install task from Tekton Hub
+     * @param task task name
+     * @param version version of the task
+     * @param overwrite if the task is already installed and we want to overwrite that
+     * @throws IOException if communication errored
+     */
+    void installTaskFromHub(String task, String version, boolean overwrite) throws IOException;
+
+    /**
+     * Get the task yaml from Tekton Hub
+     * @param task task name
+     * @param version version of the task
+     * @return the task yaml
+     * @throws IOException if communication errored
+     */
+    String getTaskYAMLFromHub(String task, String version) throws IOException;
 
     public URL getMasterUrl();
 

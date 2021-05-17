@@ -16,6 +16,64 @@ A JetBrains IntelliJ plugin for interacting with Tekton Pipelines. This plugin i
 ## New and Noteworthy
 
 This new release is based on v1beta1. Although it still supports v1alpha1 resources (resources, conditions), we do not support v1alpha1 version for resources that have v1beta1.
+
+### Find Task references
+
+It is possible to find all references of a task within the cluster. During a deletion the user is also informed if a task is used somewhere to prevent possible errors. 
+
+![](images/0.8.0/tekton1.gif)
+
+### Telemetry data collection
+
+The plugin collects anonymous usage data, if enabled, and sends it to Red Hat servers to help improve our products and services. 
+
+![](images/0.8.0/tekton2.png)
+
+### Refresh from the root
+
+The refresh action have been extended to work on the root to allow refreshing the full tree easier.
+
+## Previous releases
+
+## 0.7.0
+### Tree only shows current active namespace
+
+The tree has been refactored to only show the current active namespace. The plugin listens to any change in the kubeconfig file and refresh the tree accordingly if the active namespace/context changes.
+
+![](images/0.7.0/tekton1.gif)
+
+### Enhanced recognition of Tekton Hub's tasks/pipelines
+
+When installing tasks/pipelines from the Tekton Hub, they are now saved with labels provided by the hub allowing the plugin to better recognize them. 
+
+![](images/0.7.0/tekton2.png)
+
+## 0.6.0
+### Enhanced logs
+
+Logs have been extended to work with EventListeners and they can be now redirected into the editor 
+
+![](images/0.6.0/tekton1.gif)
+
+### Add Plugin preferences
+
+It is possible to set preferences to change the default plugin behaviour, such as delete all related resources automatically or avoid showing the wizard if a pipeline/task has no inputs
+
+![](images/0.6.0/tekton2.gif)
+
+### UI enhancements
+
+The Start Wizard Preview panel updates on changes and it display texts of any length in a well formatted way 
+
+![](images/0.6.0/tekton3.gif)
+
+### Code completion on single inputs
+
+When adding a task to a pipeline definition, code completion gets also activated on single inputs (param, input/output resource and workspace). If the input contains a default value, then this value is also inserted into the pipeline definition.
+
+![](images/0.6.0/tekton4.gif)
+
+## 0.5.0
 The Tekton CLI in use has been upgrated to 0.15.0.
 
 ### Enhanced Tekton Hub integration
@@ -47,8 +105,6 @@ Task ordering can be managed through the **runAfter** field. However, uses of th
 When starting a task or a pipeline, it is possible to see the generated taskrun or pipelinerun payload with the **Show Preview** option:
 
 ![](images/0.5.0/tekton5.gif)
-
-## Previous releases
 
 ## 0.4.1
 
@@ -291,6 +347,10 @@ This plugin uses a CLI tool to interact with Tekton Pipelines:
 ## Release notes
 
 See the change log.
+
+Data and Telemetry
+==================
+The JetBrains IntelliJ Tekton plugin collects anonymous [usage data](USAGE_DATA.md) and sends it to Red Hat servers to help improve our products and services. Read our [privacy statement](https://developers.redhat.com/article/tool-data-collection) to learn more. This extension respects the Red Hat Telemetry setting which you can learn more about at [https://github.com/redhat-developer/intellij-redhat-telemetry#telemetry-reporting](https://github.com/redhat-developer/intellij-redhat-telemetry#telemetry-reporting)
 
 Contributing
 ============

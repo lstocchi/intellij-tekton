@@ -31,28 +31,27 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public class DeleteDialog extends DialogWrapper{
-    private JCheckBox deleteResourcesChb;
+    private JCheckBox deleteRelatedResourcesChb;
     private JPanel myContentPanel;
     private JLabel deleteText;
-    private JLabel deleteResourceText;
     private GridBagConstraints gridBagConstraints;
-    private boolean deleteResources;
+    private boolean deleteRelatedResources;
 
-    public DeleteDialog(Component parent, String title, String mainDeleteText, String deleteResourcesText, String deleteChkText) {
+    public DeleteDialog(Component parent, String title, String mainDeleteText, String deleteChkText) {
         super(null, parent, false, DialogWrapper.IdeModalityType.IDE);
         GridBagLayout gridBagLayout = new GridBagLayout();
         gridBagConstraints = new GridBagConstraints();
         this.myContentPanel = new JPanel(gridBagLayout);
-        this.deleteResources = false;
+        this.deleteRelatedResources = false;
 
         setTitle(title);
-        fillContainer(mainDeleteText, deleteResourcesText, deleteChkText);
-        setOKButtonText("Deleteee");
+        fillContainer(mainDeleteText, deleteChkText);
+        setOKButtonText("Delete");
         init();
     }
 
     public static void main(String[] args) {
-        DeleteDialog dialog = new DeleteDialog(null, "", "", "", "");
+        DeleteDialog dialog = new DeleteDialog(null, "", "", "");
         dialog.pack();
         dialog.show();
         System.exit(0);
@@ -60,12 +59,12 @@ public class DeleteDialog extends DialogWrapper{
 
     @Override
     protected void doOKAction() {
-        this.deleteResources = deleteResourcesChb.isSelected();
+        this.deleteRelatedResources = deleteRelatedResourcesChb != null ? deleteRelatedResourcesChb.isSelected() : false;
         super.doOKAction();
     }
 
-    public boolean hasToDeleteResources() {
-        return this.deleteResources;
+    public boolean hasToDeleteRelatedResources() {
+        return this.deleteRelatedResources;
     }
 
     @Nullable
@@ -76,7 +75,7 @@ public class DeleteDialog extends DialogWrapper{
         return panel;
     }
 
-    private void fillContainer(String mainDeleteText, String deleteResourcesText, String deleteChkText) {
+    private void fillContainer(String mainDeleteText, String deleteChkText) {
         String[] itemsToDelete = mainDeleteText.split("\n");
         deleteText = new JLabel(itemsToDelete[0]);
         addComponent(deleteText, new EmptyBorder(10, 10, 5, 10), null, 0, 1, GridBagConstraints.NORTHWEST);
@@ -95,12 +94,11 @@ public class DeleteDialog extends DialogWrapper{
             addComponent(scroll, new EmptyBorder(10, 10, 5, 10), scrollSize, 0, 2, GridBagConstraints.NORTHWEST);
         }
 
-        deleteResourceText = new JLabel("<html><span style=\"font-size:11px;font-weight:bold;\">" + deleteResourcesText + "</span></html>");
-        addComponent(deleteResourceText, new EmptyBorder(20, 10, 5, 10), null, 0, 3, GridBagConstraints.NORTHWEST);
-
-        deleteResourcesChb = new JCheckBox(deleteChkText);
-        deleteResourcesChb.setSelected(SettingsState.getInstance().enableDeleteAllRelatedResourcesAsDefault);
-        addComponent(deleteResourcesChb, new EmptyBorder(5, 10, 10, 10), null, 0, 4, GridBagConstraints.NORTHWEST);
+        if (!deleteChkText.isEmpty()) {
+            deleteRelatedResourcesChb = new JCheckBox(deleteChkText);
+            deleteRelatedResourcesChb.setSelected(SettingsState.getInstance().enableDeleteAllRelatedResourcesAsDefault);
+            addComponent(deleteRelatedResourcesChb, new EmptyBorder(5, 10, 10, 10), null, 0, 4, GridBagConstraints.NORTHWEST);
+        }
     }
 
     private JComponent addComponent(@NotNull JComponent component, Border border, Dimension preferredSize, @NotNull int col, @NotNull int row, @NotNull int anchor) {

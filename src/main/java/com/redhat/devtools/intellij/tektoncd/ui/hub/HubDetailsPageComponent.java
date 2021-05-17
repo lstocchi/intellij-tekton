@@ -39,12 +39,12 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Insets;
 import java.awt.event.ItemEvent;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
-import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import javax.swing.JComboBox;
@@ -325,7 +325,7 @@ public class HubDetailsPageComponent extends MultiPanel {
                 try {
                     Desktop.getDesktop().browse(resource.getLatestVersion().getWebURL());
                 } catch (IOException e) {
-                    logger.warn(e.getLocalizedMessage());
+                    logger.warn(e.getLocalizedMessage(), e);
                 }
             });
 
@@ -352,7 +352,7 @@ public class HubDetailsPageComponent extends MultiPanel {
                 String yaml = model.getContentByURI(rawURI.toString());
                 updateEditor(item, myYamlComponent, "<pre>" + yaml + "</pre>");
             } catch (IOException e) {
-                logger.warn(e.getLocalizedMessage());
+                logger.warn(e.getLocalizedMessage(), e);
             }
         });
 
@@ -372,7 +372,7 @@ public class HubDetailsPageComponent extends MultiPanel {
 
                 updateEditor(item, myDescriptionComponent, html);
             } catch (IOException e) {
-                logger.warn(e.getLocalizedMessage());
+                logger.warn(e.getLocalizedMessage(), e);
             }
         });
     }
@@ -384,7 +384,7 @@ public class HubDetailsPageComponent extends MultiPanel {
                     editor.setText(content);
                     editor.setCaretPosition(0);
                 } catch (Exception ex) {
-                    logger.warn(ex.getLocalizedMessage());
+                    logger.warn(ex.getLocalizedMessage(), ex);
                 }
             }
         });
@@ -394,11 +394,7 @@ public class HubDetailsPageComponent extends MultiPanel {
         if (installBtn.getMouseListeners().length > 0) {
             installBtn.removeMouseListener(installBtn.getMouseListeners()[0]);
         }
-        installBtn.addMouseListener(new MouseListener() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-
-            }
+        installBtn.addMouseListener(new MouseAdapter() {
 
             @Override
             public void mousePressed(MouseEvent e) {
@@ -409,30 +405,11 @@ public class HubDetailsPageComponent extends MultiPanel {
                     installHubItem(item, doInstallAsCTAction);
                 }
             }
-
-            @Override
-            public void mouseReleased(MouseEvent e) {
-
-            }
-
-            @Override
-            public void mouseEntered(MouseEvent e) {
-
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-
-            }
         });
     }
 
     private void installHubItem(HubItem item, BiConsumer<HubItem, String> doInstallAction) {
-        ResourceData resource = item.getResource();
         String versionSelected = ((ResourceVersionData)versionsCmb.getSelectedItem()).getVersion();
-        Optional<String> rawURI = resource.getVersions().stream().filter(version -> version.getVersion().equalsIgnoreCase(versionSelected)).map(version -> version.getRawURL().toString()).findFirst();
-        if (rawURI.isPresent()) {
-            doInstallAction.accept(item, rawURI.get());
-        }
+        doInstallAction.accept(item, versionSelected);
     }
 }

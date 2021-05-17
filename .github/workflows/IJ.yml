@@ -5,16 +5,16 @@ name: Validate against IJ versions
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]    
+    branches: [ main ]
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        IJ: [IU-2019.3, IU-2020.1, IU-2020.2, IU-2020.3]
+        IJ: [IU-2019.3, IU-2020.1, IU-2020.2, IU-2020.3, IU-2021.1]
 
     steps:
     - uses: actions/checkout@v2

@@ -11,6 +11,7 @@
 package com.redhat.devtools.intellij.tektoncd.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -263,7 +264,7 @@ public class YAMLBuilder {
         } else if (model instanceof TaskConfigurationModel) {
             Map<String, Workspace> workspaces = new HashMap<>();
             ((TaskConfigurationModel)model).getWorkspaces().stream().forEach(workspaceName -> {
-                Workspace workspace = new Workspace(workspaceName,  Workspace.Kind.EMPTYDIR, null);
+                Workspace workspace = new Workspace(workspaceName,  Workspace.Kind.EMPTYDIR, "");
                 workspaces.put(workspaceName, workspace);
             });
             spec = createTaskRunSpec(model.getName(),
@@ -403,6 +404,56 @@ public class YAMLBuilder {
         return rootNode;
     }
 
+    public static ObjectNode createTask(String name, String kind, ObjectNode taskSpec) {
+        JsonNode metadataNode = taskSpec.remove("metadata");
+        if (metadataNode == null) {
+            metadataNode = YAML_MAPPER.createObjectNode();
+        }
+        if (!metadataNode.has("name")) {
+            ((ObjectNode) metadataNode).put("name", name);
+        }
+
+        ObjectNode task = YAML_MAPPER.createObjectNode();
+        task.put("apiVersion", "tekton.dev/v1beta1");
+        task.put("kind", kind);
+        task.set("metadata", metadataNode);
+        task.set("spec", taskSpec);
+        return task;
+    }
+
+    public static ObjectNode createVCT(String name, String accessMode, String size, String unit) {
+        ObjectNode metadataNode = YAML_MAPPER.createObjectNode();
+        metadataNode.put("name", name);
+
+        ObjectNode spec = YAML_MAPPER.createObjectNode();
+
+        ObjectNode requests = YAML_MAPPER.createObjectNode();
+        ObjectNode resources = YAML_MAPPER.createObjectNode();
+        requests.put("storage", size + unit);
+        resources.set("requests", requests);
+
+        ArrayNode accessModes = YAML_MAPPER.createArrayNode();
+        accessModes.add(accessMode);
+
+        spec.set("resources", resources);
+        spec.put("volumeMode", "Filesystem");
+        spec.set("accessModes", accessModes);
+
+        ObjectNode vct = YAML_MAPPER.createObjectNode();
+        vct.set("metadata", metadataNode);
+        vct.set("spec", spec);
+        return vct;
+    }
+
+    public static ObjectNode createTaskRef(String name, String kind) {
+        ObjectNode taskRef = YAML_MAPPER.createObjectNode();
+        ObjectNode metadataTaskRef = YAML_MAPPER.createObjectNode();
+        metadataTaskRef.put("name", name);
+        metadataTaskRef.put("kind", kind);
+        taskRef.set("taskRef", metadataTaskRef);
+        return taskRef;
+    }
+
     public static String writeValueAsString(ObjectNode rootNode) throws IOException {
         try {
             return new YAMLMapper().writeValueAsString(rootNode);
@@ -414,6 +465,14 @@ public class YAMLBuilder {
     public static String writeValueAsString(Map<String, Object> value) throws IOException {
         try {
             return new YAMLMapper().writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IOException(e);
+        }
+    }
+
+    public static ObjectNode convertToObjectNode(String yaml) throws IOException {
+        try {
+            return (ObjectNode) YAML_MAPPER.readTree(yaml);
         } catch (JsonProcessingException e) {
             throw new IOException(e);
         }

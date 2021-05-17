@@ -22,7 +22,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
-import com.redhat.devtools.intellij.tektoncd.validation.KubernetesTypeInfo;
+import com.redhat.devtools.intellij.common.validation.KubernetesTypeInfo;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -50,9 +50,9 @@ public class TektonFileEditorProvider implements FileEditorProvider, DumbAware {
     private GraphUpdater getGraphUpdater(KubernetesTypeInfo typeInfo) {
         GraphUpdater updater = null;
         if (typeInfo.getApiGroup().startsWith("tekton.dev") && "Pipeline".equals(typeInfo.getKind())) {
-            return new PipelineGraphUpdater();
+            updater =  new PipelineGraphUpdater();
         } else if (typeInfo.getApiGroup().startsWith("tekton.dev") && "PipelineRun".equals(typeInfo.getKind())) {
-            return new PipelineRunGraphUpdater();
+            updater = new PipelineRunGraphUpdater();
         }
         return updater;
     }
