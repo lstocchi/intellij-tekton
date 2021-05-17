@@ -79,7 +79,7 @@ public class TknCliTaskTest extends TknCliTest {
         tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE).list()
                 .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
         // verify taskrun has been created
-        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE)
+        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE).withName(TASK_RUN_NAME)
                 .waitUntilCondition(taskRun -> taskRun.getMetadata().getName() != null && taskRun.getMetadata().getName().equals(TASK_RUN_NAME), 10, TimeUnit.MINUTES);
         tkn.cancelTaskRun(NAMESPACE, TASK_RUN_NAME);
         // clean up and verify cleaning succeed

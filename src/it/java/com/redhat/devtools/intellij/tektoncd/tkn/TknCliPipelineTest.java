@@ -89,8 +89,10 @@ public class TknCliPipelineTest extends TknCliTest {
         // verify pipeline has been created
         List<String> pipelines = tkn.getPipelines(NAMESPACE);
         assertTrue(pipelines.contains(PIPELINE_NAME));
+        List<io.fabric8.tekton.pipeline.v1beta1.PipelineRun> l = tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE)
+                .list().getItems();
         // verify pipelinerun has been created
-        tkn.getClient(TektonClient.class).v1beta1().pipelineRuns()
+        tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE).withName(PIPELINE_RUN_NAME)
                 .waitUntilCondition(pipelineRun -> pipelineRun.getMetadata().getName() != null && pipelineRun.getMetadata().getName().equals(PIPELINE_RUN_NAME), 10, TimeUnit.MINUTES);
         tkn.cancelPipelineRun(NAMESPACE, PIPELINE_RUN_NAME);
         // clean up and verify cleaning succeed
