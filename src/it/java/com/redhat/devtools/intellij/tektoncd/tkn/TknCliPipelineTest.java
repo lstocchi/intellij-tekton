@@ -18,7 +18,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.junit.Test;
 
@@ -76,24 +76,13 @@ public class TknCliPipelineTest extends TknCliTest {
         List<String> tasks = tkn.getTasks(NAMESPACE).stream().map(task -> task.getMetadata().getName()).collect(Collectors.toList());
         assertTrue(tasks.contains(TASK_NAME));
         Thread.sleep(2000);
-        tkn.getTaskRuns(NAMESPACE, TASK_NAME).stream().forEach(r -> {
-            System.out.println(r.getName());
-        });
-        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE).list()
-                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
-        tkn.getPipelineRuns(NAMESPACE, PIPELINE_NAME).stream().forEach(r -> {
-            System.out.println(r.getName());
-        });
-        tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE).list()
-                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
         // verify pipeline has been created
         List<String> pipelines = tkn.getPipelines(NAMESPACE);
         assertTrue(pipelines.contains(PIPELINE_NAME));
-        List<io.fabric8.tekton.pipeline.v1beta1.PipelineRun> l = tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE)
+        List<io.fabric8.tekton.pipeline.v1beta1.PipelineRun> pRuns = tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE)
                 .list().getItems();
         // verify pipelinerun has been created
-        tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE).withName(PIPELINE_RUN_NAME)
-                .waitUntilCondition(pipelineRun -> pipelineRun.getMetadata().getName() != null && pipelineRun.getMetadata().getName().equals(PIPELINE_RUN_NAME), 10, TimeUnit.MINUTES);
+        assertTrue(pRuns.stream().anyMatch(pRun -> pRun.getMetadata().getName().equals(PIPELINE_RUN_NAME)));
         tkn.cancelPipelineRun(NAMESPACE, PIPELINE_RUN_NAME);
         // clean up and verify cleaning succeed
         tkn.deletePipelines(NAMESPACE, Arrays.asList(PIPELINE_NAME), true);
@@ -125,21 +114,12 @@ public class TknCliPipelineTest extends TknCliTest {
         params.put("third", "3");
         tkn.startPipeline(NAMESPACE, PIPELINE_NAME, params, Collections.emptyMap(), "", Collections.emptyMap(), Collections.emptyMap(), "");
         Thread.sleep(2000);
-        tkn.getTaskRuns(NAMESPACE, TASK_NAME).stream().forEach(r -> {
-            System.out.println(r.getName());
-        });
-        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE).list()
-                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
-        tkn.getPipelineRuns(NAMESPACE, PIPELINE_NAME).stream().forEach(r -> {
-            System.out.println(r.getName());
-        });
-        tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE).list()
-                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
-        io.fabric8.tekton.pipeline.v1beta1.PipelineRun pRun = tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE)
-                .waitUntilCondition(pipelineRun -> pipelineRun.getMetadata().getName() != null && pipelineRun.getMetadata().getName().startsWith(PIPELINE_NAME), 10, TimeUnit.MINUTES);
-        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE)
-                .waitUntilCondition(taskRun -> taskRun.getMetadata().getName() != null && taskRun.getMetadata().getName().startsWith(PIPELINE_NAME), 10, TimeUnit.MINUTES);
-        tkn.cancelPipelineRun(NAMESPACE, pRun.getMetadata().getName());
+        List<io.fabric8.tekton.pipeline.v1beta1.PipelineRun> pRuns = tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE)
+                .list().getItems();
+        Optional<String> pRunName = pRuns.stream().filter(pipelineRun -> pipelineRun.getMetadata().getName().startsWith(PIPELINE_NAME))
+                .map(pipelineRun -> pipelineRun.getMetadata().getName()).findFirst();
+        assertTrue(pRunName.isPresent());
+        tkn.cancelPipelineRun(NAMESPACE, pRunName.get());
         // clean up
         tkn.deletePipelines(NAMESPACE, Arrays.asList(PIPELINE_NAME), true);
         tkn.deleteTasks(NAMESPACE, Arrays.asList(TASK_NAME), false);
