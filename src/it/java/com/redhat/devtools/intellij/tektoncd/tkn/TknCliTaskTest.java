@@ -72,6 +72,12 @@ public class TknCliTaskTest extends TknCliTest {
         // verify task has been created
         List<String> tasks = tkn.getTasks(NAMESPACE).stream().map(task -> task.getMetadata().getName()).collect(Collectors.toList());
         assertTrue(tasks.contains(TASK_NAME));
+        Thread.sleep(2000);
+        tkn.getTaskRuns(NAMESPACE, TASK_NAME).stream().forEach(r -> {
+            System.out.println(r.getName());
+        });
+        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE).list()
+                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
         // verify taskrun has been created
         tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE)
                 .waitUntilCondition(taskRun -> taskRun.getMetadata().getName() != null && taskRun.getMetadata().getName().equals(TASK_RUN_NAME), 10, TimeUnit.MINUTES);
@@ -99,6 +105,12 @@ public class TknCliTaskTest extends TknCliTest {
         params.put("first", "1");
         params.put("second", "2");
         tkn.startTask(NAMESPACE, TASK_NAME, params, Collections.emptyMap(), Collections.emptyMap(), "", Collections.emptyMap(), "");
+        Thread.sleep(2000);
+        tkn.getTaskRuns(NAMESPACE, TASK_NAME).stream().forEach(r -> {
+            System.out.println(r.getName());
+        });
+        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE).list()
+                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
         io.fabric8.tekton.pipeline.v1beta1.TaskRun tRun = tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE)
                 .waitUntilCondition(taskRun -> taskRun.getMetadata().getName() != null && taskRun.getMetadata().getName().startsWith(TASK_NAME), 10, TimeUnit.MINUTES);
         tkn.cancelTaskRun(NAMESPACE, tRun.getMetadata().getName());

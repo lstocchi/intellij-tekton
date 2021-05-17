@@ -75,6 +75,17 @@ public class TknCliPipelineTest extends TknCliTest {
         // verify task has been created
         List<String> tasks = tkn.getTasks(NAMESPACE).stream().map(task -> task.getMetadata().getName()).collect(Collectors.toList());
         assertTrue(tasks.contains(TASK_NAME));
+        Thread.sleep(2000);
+        tkn.getTaskRuns(NAMESPACE, TASK_NAME).stream().forEach(r -> {
+            System.out.println(r.getName());
+        });
+        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE).list()
+                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
+        tkn.getPipelineRuns(NAMESPACE, PIPELINE_NAME).stream().forEach(r -> {
+            System.out.println(r.getName());
+        });
+        tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE).list()
+                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
         // verify pipeline has been created
         List<String> pipelines = tkn.getPipelines(NAMESPACE);
         assertTrue(pipelines.contains(PIPELINE_NAME));
@@ -111,6 +122,17 @@ public class TknCliPipelineTest extends TknCliTest {
         params.put("second", "2");
         params.put("third", "3");
         tkn.startPipeline(NAMESPACE, PIPELINE_NAME, params, Collections.emptyMap(), "", Collections.emptyMap(), Collections.emptyMap(), "");
+        Thread.sleep(2000);
+        tkn.getTaskRuns(NAMESPACE, TASK_NAME).stream().forEach(r -> {
+            System.out.println(r.getName());
+        });
+        tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE).list()
+                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
+        tkn.getPipelineRuns(NAMESPACE, PIPELINE_NAME).stream().forEach(r -> {
+            System.out.println(r.getName());
+        });
+        tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE).list()
+                .getItems().forEach(r -> System.out.println(r.getMetadata().getName()));
         io.fabric8.tekton.pipeline.v1beta1.PipelineRun pRun = tkn.getClient(TektonClient.class).v1beta1().pipelineRuns().inNamespace(NAMESPACE)
                 .waitUntilCondition(pipelineRun -> pipelineRun.getMetadata().getName() != null && pipelineRun.getMetadata().getName().startsWith(PIPELINE_NAME), 10, TimeUnit.MINUTES);
         tkn.getClient(TektonClient.class).v1beta1().taskRuns().inNamespace(NAMESPACE)
